@@ -1,3 +1,5 @@
+import { detectGesture } from "./gestures";
+
 const fingerJoints = {
 	thumb: [0, 1, 2, 3, 4],
 	indexFinger: [0, 5, 6, 7, 8],
@@ -53,4 +55,33 @@ const drawHand = (predictions, ctx) => {
 	}
 };
 
-export { drawHand };
+const detect = async (net, webcamRef, canvasRef) => {
+	if (
+		typeof webcamRef.current !== "undefined" &&
+		webcamRef.current !== null &&
+		webcamRef.current.video.readyState === 4
+	) {
+		// Get Video Properties
+		const video = webcamRef.current.video;
+		const videoWidth = webcamRef.current.video.videoWidth;
+		const videoHeight = webcamRef.current.video.videoHeight;
+
+		// Set video width
+		webcamRef.current.video.width = videoWidth;
+		webcamRef.current.video.height = videoHeight;
+
+		// Set canvas height and width
+		canvasRef.current.width = videoWidth;
+		canvasRef.current.height = videoHeight;
+
+		// Make Detections
+		const hand = await net.estimateHands(video);
+
+		// Draw mesh
+		const ctx = canvasRef.current.getContext("2d");
+		drawHand(hand, ctx);
+		hand && detectGesture(hand);
+	}
+};
+
+export { drawHand, detect };
