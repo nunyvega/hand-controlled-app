@@ -1,5 +1,4 @@
-import { detectGesture } from "./gestures";
-
+//utilities.js
 const fingerJoints = {
 	thumb: [0, 1, 2, 3, 4],
 	indexFinger: [0, 5, 6, 7, 8],
@@ -9,22 +8,15 @@ const fingerJoints = {
 };
 
 const drawHand = (predictions, ctx) => {
-	// Check if we have predictions
+	console.log("inside draw hand");
 	if (predictions.length > 0) {
 		predictions.forEach((prediction) => {
-			// Draw landmarks
 			const landmarks = prediction.landmarks;
-
-			// Loop through fingers
 			for (let j = 0; j < Object.keys(fingerJoints).length; j++) {
 				let finger = Object.keys(fingerJoints)[j];
-				//  Loop through pairs of joints
 				for (let k = 0; k < fingerJoints[finger].length - 1; k++) {
-					// Get pairs of joints
 					const firstJointIndex = fingerJoints[finger][k];
 					const secondJointIndex = fingerJoints[finger][k + 1];
-
-					// Draw path
 					ctx.beginPath();
 					ctx.moveTo(
 						landmarks[firstJointIndex][0],
@@ -39,15 +31,11 @@ const drawHand = (predictions, ctx) => {
 					ctx.stroke();
 				}
 			}
-
-			// Loop through landmarks and draw em
 			for (let i = 0; i < landmarks.length; i++) {
 				const x = landmarks[i][0];
 				const y = landmarks[i][1];
-
 				ctx.beginPath();
 				ctx.arc(x, y, 5, 0, 3 * Math.PI);
-
 				ctx.fillStyle = "red";
 				ctx.fill();
 			}
@@ -55,33 +43,58 @@ const drawHand = (predictions, ctx) => {
 	}
 };
 
-const detect = async (net, webcamRef, canvasRef) => {
-	if (
-		typeof webcamRef.current !== "undefined" &&
-		webcamRef.current !== null &&
-		webcamRef.current.video.readyState === 4
-	) {
-		// Get Video Properties
+const runDetection = async (
+	model,
+	currentNumber,
+	setScore,
+	setCurrentNumber,
+	setGameMessage,
+	webcamRef,
+	canvasRef
+) => {
+	if (webcamRef.current && webcamRef.current.video.readyState === 4) {
 		const video = webcamRef.current.video;
-		const videoWidth = webcamRef.current.video.videoWidth;
-		const videoHeight = webcamRef.current.video.videoHeight;
-
-		// Set video width
-		webcamRef.current.video.width = videoWidth;
-		webcamRef.current.video.height = videoHeight;
-
-		// Set canvas height and width
-		canvasRef.current.width = videoWidth;
-		canvasRef.current.height = videoHeight;
-
-		// Make Detections
-		const hand = await net.estimateHands(video);
-
-		// Draw mesh
+		const hand = await model.estimateHands(video);
 		const ctx = canvasRef.current.getContext("2d");
+		ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); // Clear the canvas
 		drawHand(hand, ctx);
-		hand && detectGesture(hand);
+
+		if (hand.length > 0) {
+			const fingersCounted = detectFingers(hand);
+			if (fingersCounted === currentNumber) {
+				setScore((prevScore) => prevScore + 1);
+				const newNumber = Math.floor(Math.random() * 5) + 1;
+				setCurrentNumber(newNumber);
+				setGameMessage(`Correct! Now show me ${newNumber} fingers.`);
+			} else {
+				setGameMessage(`Try again! Show me ${currentNumber} fingers.`);
+			}
+		}
 	}
 };
 
-export { drawHand, detect };
+const detectFingers = (hand) => {
+	console.log("inside detect fingers");
+
+	if (!hand || hand.length === 0) return 0; // No hand detected
+
+	const landmarks = hand[0].landmarks;
+	let count = 0;
+
+	// Thumb: Check if the tip is farther on the x-axis from the base
+	const thumbIsOpen = landmarks[4][0] > landmarks[3][0];
+	if (thumbIsOpen) count++;
+
+	// Other Fingers: Check if the tip is lower on the y-axis than the PIP joint
+	const fingers = [8, 12, 16, 20]; // Indices of fingertips for index, middle, ring, and pinky
+	fingers.forEach((tipIndex) => {
+		const pipIndex = tipIndex - 2;
+		if (landmarks[tipIndex][1] < landmarks[pipIndex][1]) {
+			count++;
+		}
+	});
+
+	return count;
+};
+
+export { drawHand, detectFingers, runDetection };
