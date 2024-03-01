@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from "react";
 import Webcam from "react-webcam";
 import * as handpose from "@tensorflow-models/handpose";
 import "@tensorflow/tfjs";
-import { runDetection } from "./utilities";
+import { runDetection, generateRandomFingerRequirement } from "./utilities";
 
 function App() {
 	const webcamRef = useRef(null);
@@ -10,57 +10,44 @@ function App() {
 	const [model, setModel] = useState(null);
 	const [isModelLoaded, setIsModelLoaded] = useState(false);
 	const [gameMessage, setGameMessage] = useState("Loading model...");
-	const [currentNumber, setCurrentNumber] = useState(1);
+	const [currentFingerRequirement, setCurrentFingerRequirement] = useState(
+		generateRandomFingerRequirement()
+	);
 	const [score, setScore] = useState(0);
 	const [gameTime, setGameTime] = useState(10);
 	const [gameStarted, setGameStarted] = useState(false);
-
-	// not used yet
-	const gameTimerCountdown = () => {
-		let time = 10;
-		const intervalId = setInterval(() => {
-			time--;
-			setGameTime(time);
-			if (time === 0) {
-				clearInterval(intervalId);
-				setGameMessage("Game Over! Your final score is " + score);
-			}
-		}, 1000);
-	};
 
 	useEffect(() => {
 		handpose.load().then((loadedModel) => {
 			setModel(loadedModel);
 			setIsModelLoaded(true);
 			setGameMessage("Model loaded. Show your hand to start playing.");
-			setCurrentNumber(Math.floor(Math.random() * 5) + 1);
+			setCurrentFingerRequirement(generateRandomFingerRequirement());
 		});
 	}, []);
 
 	useEffect(() => {
-		if (!model) return;
+		if (!model || !gameStarted) return;
 
 		const intervalId = setInterval(() => {
 			runDetection(
 				model,
-				currentNumber,
+				currentFingerRequirement,
 				setScore,
-				setCurrentNumber,
+				setCurrentFingerRequirement,
 				setGameMessage,
 				webcamRef,
-				canvasRef,
-				setGameStarted
+				canvasRef
 			);
 		}, 100);
 
 		return () => clearInterval(intervalId);
-	}, [model, currentNumber, score]);
+	}, [model, gameStarted, currentFingerRequirement, score]);
 
 	useEffect(() => {
 		const videoElement = webcamRef.current.video;
 
 		if (videoElement && videoElement.readyState === 4) {
-			// Video dimensions are known, set canvas dimensions to match
 			const videoWidth = videoElement.videoWidth;
 			const videoHeight = videoElement.videoHeight;
 
@@ -68,6 +55,28 @@ function App() {
 			canvasRef.current.height = videoHeight;
 		}
 	}, [isModelLoaded]); // This effect runs when the model becomes loaded
+
+	// Start game and timer when the user is ready, could be triggered by a button click or automatically
+	useEffect(() => {
+		if (isModelLoaded && !gameStarted) {
+			setGameStarted(true);
+			gameTimerCountdown();
+		}
+	}, [isModelLoaded, gameStarted]);
+
+	const gameTimerCountdown = () => {
+		let time = 10; // Reset time to 10 or any desired game time
+		setGameTime(time);
+		const intervalId = setInterval(() => {
+			time--;
+			setGameTime(time);
+			if (time === 0) {
+				clearInterval(intervalId);
+				setGameMessage("Game Over! Your final score is " + score);
+				setGameStarted(false); // Optionally reset gameStarted to allow restarting the game
+			}
+		}, 1000);
+	};
 
 	return (
 		<div className="App">
@@ -116,6 +125,8 @@ function App() {
 					>
 						Time: {gameTime}
 					</p>
+					{/* Button to start game, if using a manual start */}
+					{/* <button onClick={startGame}>Start Game</button> */}
 				</div>
 				<div style={{ display: "flex", justifyContent: "center" }}>
 					<Webcam
@@ -123,7 +134,6 @@ function App() {
 						style={{
 							position: "absolute",
 							marginLeft: "2rem",
-
 							width: 640,
 							height: 480,
 							borderRadius: "10px",

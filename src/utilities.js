@@ -1,4 +1,4 @@
-//utilities.js
+// utilities.js
 const fingerJoints = {
 	thumb: [0, 1, 2, 3, 4],
 	indexFinger: [0, 5, 6, 7, 8],
@@ -8,7 +8,6 @@ const fingerJoints = {
 };
 
 const drawHand = (predictions, ctx) => {
-	console.log("inside draw hand");
 	if (predictions.length > 0) {
 		predictions.forEach((prediction) => {
 			const landmarks = prediction.landmarks;
@@ -43,11 +42,50 @@ const drawHand = (predictions, ctx) => {
 	}
 };
 
+const detectFingers = (hand) => {
+	if (!hand || hand.length === 0)
+		return {
+			thumb: false,
+			index: false,
+			middle: false,
+			ring: false,
+			pinky: false,
+		};
+
+	const landmarks = hand[0].landmarks;
+	let fingerStates = {
+		thumb: landmarks[4][0] > landmarks[0][0], // Consider thumb's unique orientation
+		index: landmarks[8][1] < landmarks[7][1],
+		middle: landmarks[12][1] < landmarks[11][1],
+		ring: landmarks[16][1] < landmarks[15][1],
+		pinky: landmarks[20][1] < landmarks[19][1],
+	};
+
+	return fingerStates;
+};
+
+const generateRandomFingerRequirement = () => {
+	return {
+		thumb: Math.random() < 0.5,
+		index: Math.random() < 0.5,
+		middle: Math.random() < 0.5,
+		ring: Math.random() < 0.5,
+		pinky: Math.random() < 0.5,
+	};
+};
+
+const fingerRequirementToString = (requirement) => {
+	return Object.entries(requirement)
+		.filter(([_, isRequired]) => isRequired)
+		.map(([finger]) => finger.charAt(0).toUpperCase() + finger.slice(1))
+		.join(", ");
+};
+
 const runDetection = async (
 	model,
-	currentNumber,
+	currentFingerRequirement,
 	setScore,
-	setCurrentNumber,
+	setCurrentFingerRequirement,
 	setGameMessage,
 	webcamRef,
 	canvasRef
@@ -56,45 +94,40 @@ const runDetection = async (
 		const video = webcamRef.current.video;
 		const hand = await model.estimateHands(video);
 		const ctx = canvasRef.current.getContext("2d");
-		ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); // Clear the canvas
+		ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
 		drawHand(hand, ctx);
 
 		if (hand.length > 0) {
-			const fingersCounted = detectFingers(hand);
-			if (fingersCounted === currentNumber) {
+			const fingerStates = detectFingers(hand);
+			const isCorrect = Object.keys(currentFingerRequirement).every(
+				(finger) =>
+					fingerStates[finger] === currentFingerRequirement[finger]
+			);
+
+			if (isCorrect) {
 				setScore((prevScore) => prevScore + 1);
-				const newNumber = Math.floor(Math.random() * 5) + 1;
-				setCurrentNumber(newNumber);
-				setGameMessage(`Correct! Now show me ${newNumber} fingers.`);
+				const newRequirement = generateRandomFingerRequirement();
+				setCurrentFingerRequirement(newRequirement);
+				setGameMessage(
+					`Correct! Now show me: ${fingerRequirementToString(
+						newRequirement
+					)}`
+				);
 			} else {
-				setGameMessage(`Try again! Show me ${currentNumber} fingers.`);
+				setGameMessage(
+					`Try again! Show me: ${fingerRequirementToString(
+						currentFingerRequirement
+					)}`
+				);
 			}
 		}
 	}
 };
 
-const detectFingers = (hand) => {
-	console.log("inside detect fingers");
-
-	if (!hand || hand.length === 0) return 0; // No hand detected
-
-	const landmarks = hand[0].landmarks;
-	let count = 0;
-
-	// Thumb: Check if the tip is farther on the x-axis from the base
-	const thumbIsOpen = landmarks[4][0] > landmarks[3][0];
-	if (thumbIsOpen) count++;
-
-	// Other Fingers: Check if the tip is lower on the y-axis than the PIP joint
-	const fingers = [8, 12, 16, 20]; // Indices of fingertips for index, middle, ring, and pinky
-	fingers.forEach((tipIndex) => {
-		const pipIndex = tipIndex - 2;
-		if (landmarks[tipIndex][1] < landmarks[pipIndex][1]) {
-			count++;
-		}
-	});
-
-	return count;
+export {
+	drawHand,
+	detectFingers,
+	runDetection,
+	generateRandomFingerRequirement,
+	fingerRequirementToString,
 };
-
-export { drawHand, detectFingers, runDetection };
