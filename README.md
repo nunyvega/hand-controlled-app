@@ -1,5 +1,8 @@
 # Hand Control App
 
+## Still under development, not yet working as expected!
+It does work, but it is not detecting the fingers in multiple hand positions.
+
 ## Overview
 
 This application utilizes TensorFlow.js, TensorFlow Models Handpose, and React Webcam to create an interactive experience where users can control various elements on the screen using hand gestures.
